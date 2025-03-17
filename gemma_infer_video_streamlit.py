@@ -9,13 +9,11 @@ import os
 import cv2
 from PIL import Image
 import tempfile
+import gc
 
-# Initialize session state at the top level
 if "analyzing" not in st.session_state:
     st.session_state["analyzing"] = False
 
-# Cache the model loading to avoid reloading on every rerun
-@st.cache_resource
 def initialize_model(model_id="google/gemma-3-12b-it"):
     """Initialize the model and processor."""
     model = Gemma3ForConditionalGeneration.from_pretrained(
@@ -24,14 +22,13 @@ def initialize_model(model_id="google/gemma-3-12b-it"):
     processor = AutoProcessor.from_pretrained(model_id)
     return model, processor
 
-# ... existing code for get_uniform_keyframes and analyze_video functions ...
-
 class StreamlitTextStreamer(TextStreamer):
-    """Custom streamer that writes to a Streamlit container."""
+    """Custom streamer that writes to both Streamlit container and terminal."""
     def __init__(self, processor, container):
         self.processor = processor
         self.container = container
         self.text = ""
+        self.model_response_started = False
 
     def put(self, value):
         if isinstance(value, torch.Tensor):
@@ -42,20 +39,39 @@ class StreamlitTextStreamer(TextStreamer):
                 if isinstance(tokens[0], list):  # Handle batch dimension
                     tokens = tokens[0]
             try:
-                decoded = self.processor.decode(tokens, skip_special_tokens=True)
+                decoded = self.processor.decode(tokens, skip_special_tokens=False)
                 if decoded:  # Only add non-empty strings
                     self.text += decoded
-                    self.container.markdown(self.text)
+                    
+                    # Print full output to terminal
+                    print(decoded, end="", flush=True)
+                    
+                    # Check if we've reached the model's response
+                    if "<start_of_turn>model" in self.text and not self.model_response_started:
+                        self.model_response_started = True
+                        # Reset text to only include content after "<start_of_turn>model"
+                        self.text = self.text.split("<start_of_turn>model", 1)[1] if "<start_of_turn>model" in self.text else ""
+                    
+                    # Only update Streamlit with model's response
+                    if self.model_response_started:
+                        self.container.markdown(self.text)
+                        
             except Exception as e:
                 print(f"Error decoding tokens: {e}")
         else:
             self.text += str(value)
-            self.container.markdown(self.text)
+            print(str(value), end="", flush=True)  # Print to terminal
+            
+            # Only update Streamlit with model's response
+            if self.model_response_started:
+                self.container.markdown(self.text)
 
     def end(self):
         """Called at the end of generation."""
         if self.text:
-            self.container.markdown(self.text)
+            if self.model_response_started:
+                self.container.markdown(self.text)
+            print("")  # Add newline at the end in terminal
 
 def analyze_video(video_path, text_prompt, output_dir, keyframe_paths, model, processor, stream_container, max_new_tokens=4096):
     """Analyze video keyframes using Gemma model."""
@@ -63,7 +79,9 @@ def analyze_video(video_path, text_prompt, output_dir, keyframe_paths, model, pr
         keyframe_paths = get_keyframes(video_path, output_dir)
 
     if model is None or processor is None:
-        model, processor = initialize_model()
+        # Load model only when needed
+        with st.spinner("Loading model within analyze_video..."):
+            model, processor = initialize_model()
     
     messages = [
         {
@@ -105,7 +123,7 @@ def analyze_video(video_path, text_prompt, output_dir, keyframe_paths, model, pr
     end_time = time.time()
     time_taken = end_time - start_time
     
-    response = processor.decode(generation, skip_special_tokens=True)
+    response = processor.decode(generation, skip_special_tokens=False)
     
     result = {
         'frames': keyframe_paths,
@@ -113,24 +131,63 @@ def analyze_video(video_path, text_prompt, output_dir, keyframe_paths, model, pr
         'time_taken': time_taken
     }
     
+    del model
+    del processor
     return result
 
+def cleanup_model_resources(model=None, processor=None):
+    """Clean up model and processor resources."""
+    if model is not None:
+        try:
+            model.to('cpu')  # Move model to CPU first
+            del model
+        except:
+            pass
+    
+    if processor is not None:
+        try:
+            del processor
+        except:
+            pass
+    
+    gc.collect()  # Run garbage collector
+    torch.cuda.empty_cache()
+    if torch.cuda.is_available():
+        torch.cuda.synchronize()  # Ensure CUDA operations are finished
+
 def main():
-    st.title("Video Analysis")
+    st.title("Nuro Video Conflict Analysis")
     st.write("Upload a video to analyze its contents.")
 
     # File uploader
     uploaded_file = st.file_uploader("Choose a video file", type=['mp4', 'mov', 'avi'])
     
-    # Slider for number of keyframes
-    num_keyframes = st.slider("Number of keyframes to analyze", 
-                            min_value=1, 
-                            max_value=30, 
-                            value=5)
+    # # Slider for number of keyframes
+    # st.subheader("Number of Keyframes")
+    # num_keyframes = st.slider("Number of keyframes to analyze", 
+    #                         min_value=1, 
+    #                         max_value=30, 
+    #                         value=5)
     
-    # Text area for custom prompt
-    default_prompt = """How many cars are there in the scene? Respond with a single number."""
-    prompt = st.text_area("Customize the prompt", value=default_prompt, height=300)
+    # Hard-code the number of keyframes
+    num_keyframes = 30
+    
+    # # Text area for custom prompt
+    default_prompt =  """
+    You are seeing key image frames of a video footage from a dashcam from the ego vehicle. You need to explain the conflicts that occur in the scene.
+    Start by breaking the scene down into 3 main parts: 
+    1. Description of road geometry. Static elements, and the environment. E.g. description of the traffic intersection, road markings, traffic lights, etc.
+    2. Which agents are present in the scene, and what are they doing to cause a conflict? Be sure to mention their directions of travel from the perspective of the ego vehicle, and clarify whether their trajectories are parallel, orthogonal, or intersecting. Explain how their movements affect the potential conflict with the ego vehicle."
+    3. What is the stage of the scenario progression? Each of these stages should capture agents' progress, intent, and interactions with the ego vehicle. Be very specific about the intent of the agents in the scene, and how they are causing a conflict with the ego vehicle.
+
+    Keep the description of each part limited to a single sentence.
+    Only reply with the answer, don't include anything else.
+    """
+    # st.subheader("Customize the Prompt")
+    # prompt = st.text_area("Customize the prompt", value=default_prompt, height=300)
+    
+    # Use default prompt directly
+    prompt = default_prompt
 
     # Show analysis and cancel button if analyzing
     if st.session_state["analyzing"]:
@@ -158,12 +215,12 @@ def main():
                         num_keyframes=num_keyframes
                     )
 
-                    # Display keyframes
-                    st.subheader("Extracted Keyframes")
-                    cols = st.columns(min(5, num_keyframes))
-                    for idx, (frame_path, col) in enumerate(zip(keyframe_paths, cols * (len(keyframe_paths) // len(cols) + 1))):
-                        if idx < len(keyframe_paths):
-                            col.image(frame_path, caption=f"Frame {idx+1}")
+                    # Display keyframes in an accordion
+                    with st.expander("Extracted Keyframes", expanded=False):
+                        cols = st.columns(min(5, num_keyframes))
+                        for idx, (frame_path, col) in enumerate(zip(keyframe_paths, cols * (len(keyframe_paths) // len(cols) + 1))):
+                            if idx < len(keyframe_paths):
+                                col.image(frame_path, caption=f"Frame {idx+1}")
 
                 st.subheader("Analysis Results")
                 # Create an empty container for streaming output
