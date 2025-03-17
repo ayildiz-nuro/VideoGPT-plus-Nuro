@@ -1,1 +1,2 @@
 from .language_model.phi3 import VideoGPTPlusPhi3ForCausalLM, VideoGPTPlusConfig
+from .language_model.llama3 import VideoGPTPlusLlama3ForCausalLM

@@ -1,0 +1,9 @@
+keyframes_output/*
+uploads/*
+
+__pycache__/*
+*.pyc
+*.pyo
+*.pyd
+*.pyw
+*.pyz
