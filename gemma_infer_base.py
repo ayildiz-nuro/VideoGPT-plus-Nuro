@@ -209,20 +209,27 @@ def analyze_video(video_path, text_prompt, output_dir, keyframe_paths, model, pr
     return result
 
 if __name__ == "__main__":
-    # video_path = "/home/ayildiz/sample_videos/video_nexar_perf_trim.mov"
-    video_path = "/home/ayildiz/sample_videos/video_nexar_badperf_trim.mov"
+    video_path = "/home/ayildiz/sample_videos/video_nexar_perf_trim.mov"
+    # video_path = "/home/ayildiz/sample_videos/video_nexar_badperf_trim.mov"
     output_dir = "keyframes_output"
     prompt = """
-    You are seeing key image frames of a video footage from a dashcam from the ego vehicle. You need to explain the conflicts that occur in the scene.
+    You are seeing key image frames of a video footage from a dashcam from the ego vehicle.
+    These images as sequential frames from a video.
+    You need to explain the conflicts that occur in the scene.
     Start by breaking the scene down into 3 main parts: 
     1. Description of road geometry. Static elements, and the environment. E.g. description of the traffic intersection, road markings, traffic lights, etc.
-    2. Which agents are present in the scene, and what are they doing to cause a conflict? Be sure to mention their directions of travel from the perspective of the ego vehicle, and clarify whether their trajectories are parallel, orthogonal, or intersecting. Explain how their movements affect the potential conflict with the ego vehicle."
+    2. Which agents are present in the scene, and what are they doing to cause a conflict? Be sure to mention their directions of travel from the perspective of the ego vehicle, and clarify whether their trajectories are parallel, orthogonal, or intersecting. Explain how their movements affect the potential conflict with the ego vehicle.
     3. What is the stage of the scenario progression? Each of these stages should capture agents' progress, intent, and interactions with the ego vehicle. Be very specific about the intent of the agents in the scene, and how they are causing a conflict with the ego vehicle.
 
-    Keep the description of each part limited to a single sentence.
-    Only reply with the answer, don't include anything else.
+    When you reply, think about the progression of the scenario through the frames.
+    Explain the movements of each agent (other cars, pedestrians, cyclists, etc.) within the scene, and how they interact with the ego vehicle.
+    When you are referring to other agents, make sure to include their direction of travel, and their speed. Also indicate identifying features of the them, such as colors of vehicles or bikes, or clothing of pedestrians.
+    The agent or agents that are causing the conflict are usually the ones that are closest to the ego vehicle and their intended trajectories are intersecting with the ego vehicle's trajectory.
+    There might be other agents in the scene that are not moving (i.e. stopped at a red light or parked at the side of the road), or moving in a direction that does not intersect with the ego vehicle's trajectory. Mention their presence, but also their irrelevance to the conflict.
+
+    There are certain cues that imply a crash has happened, i.e. a cyclist or pedestrian falling down (or disappears unexplainably across frames), cars coming to a stop, etc. Make sure to detect them.
     """
-    num_keyframes = 30
+    num_keyframes = 10
 
     keyframe_paths = get_uniform_keyframes(video_path=video_path,
                                            output_dir=output_dir,

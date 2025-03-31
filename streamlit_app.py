@@ -102,7 +102,11 @@ def display_keyframes(video_path, num_keyframes=5):
 
 def main():
     st.title("Nuro Video Conflict Analysis")
-    st.write("Upload a video to analyze its contents.")
+    st.write("Upload a scene video to analyze its contents; the video will be analyzed for conflicts between the ego vehicle and other agents.")
+    st.write("The current version of the model has trouble narrowing its focus directly on the conflict, so shorter videos (4-7 seconds) are highly recommended.")
+
+    st.markdown("Known issues:\n- Agents/Events that are too fast are sometimes missed.\n- Agents not moving or parked are sometimes detected as a part of the conflict.")
+
 
     # File uploader
     uploaded_file = st.file_uploader("Choose a video file", type=['mp4', 'mov', 'avi'])
@@ -136,6 +140,13 @@ def main():
                 
         elif status == "success":
             st.success("Analysis completed!")
+
+            st.write(" ")
+            st.subheader("Analysis Metrics")
+            st.write("1. Static elements of the scene (e.g. road markings, traffic lights, etc.)")
+            st.write("2. Agents present in the scene, and their directions of travel.")
+            st.write("3. Stage of the scenario progression.")
+
             
             # Display the result
             if os.path.exists(result_path):

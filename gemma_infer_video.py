@@ -43,7 +43,7 @@ def get_keyframes(video_path, output_dir, num_keyframes=5):
     return keyframe_paths
 
 
-def get_uniform_keyframes(video_path, num_keyframes=30):
+def get_uniform_keyframes(video_path, num_keyframes=10):
     """Extract uniform keyframes from the video."""
     print(f"Extracting {num_keyframes} keyframes from {video_path}...")
     

@@ -1,4 +1,5 @@
 keyframes_output/*
+localhost_inference/*
 uploads/*
 
 __pycache__/*

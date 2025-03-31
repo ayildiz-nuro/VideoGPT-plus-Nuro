@@ -25,16 +25,6 @@ if not os.path.exists(COMPLETED_FILE):
     pd.DataFrame(columns=["id", "timestamp", "video_path", "status", "result_path", "completed_at"]).to_csv(COMPLETED_FILE, index=False)
     print(f"Created new completed jobs file: {COMPLETED_FILE}")
 
-DEFAULT_PROMPT = """
-You are seeing key image frames of a video footage from a dashcam from the ego vehicle. You need to explain the conflicts that occur in the scene.
-Start by breaking the scene down into 3 main parts: 
-1. Description of road geometry. Static elements, and the environment. E.g. description of the traffic intersection, road markings, traffic lights, etc.
-2. Which agents are present in the scene, and what are they doing to cause a conflict? Be sure to mention their directions of travel from the perspective of the ego vehicle, and clarify whether their trajectories are parallel, orthogonal, or intersecting. Explain how their movements affect the potential conflict with the ego vehicle."
-3. What is the stage of the scenario progression? Each of these stages should capture agents' progress, intent, and interactions with the ego vehicle. Be very specific about the intent of the agents in the scene, and how they are causing a conflict with the ego vehicle.
-
-Keep the description of each part limited to a single sentence.
-Only reply with the answer, don't include anything else.
-"""
 
 def move_to_completed(request_id, status, result_path=""):
     """Move a request from the queue to the completed jobs file."""
